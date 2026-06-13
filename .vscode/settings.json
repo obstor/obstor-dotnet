@@ -1,4 +1,4 @@
 {
-  "dotnet.defaultSolution": "minio-dotnet2.sln",
+  "dotnet.defaultSolution": "obstor-dotnet.sln",
   "editor.formatOnSave": true
 }

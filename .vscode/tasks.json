@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Minio.Examples.Simple/Minio.Examples.Simple.csproj",
+                "${workspaceFolder}/Obstor.Examples.Simple/Obstor.Examples.Simple.csproj",
                 "-c", "Debug",
                 "-f", "net10.0",
                 "/property:GenerateFullPaths=true",
@@ -21,7 +21,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/Minio.Examples.Host/Minio.Examples.Host.csproj",
+                "${workspaceFolder}/Obstor.Examples.Host/Obstor.Examples.Host.csproj",
                 "-c", "Debug",
                 "-f", "net10.0",
                 "/property:GenerateFullPaths=true",
