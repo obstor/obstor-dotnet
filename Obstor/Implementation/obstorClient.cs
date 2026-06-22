@@ -1319,10 +1319,19 @@ internal class ObstorClient : IObstorClient
             var headersLength = BinaryPrimitives.ReadInt32BigEndian(prelude.AsSpan(4, 4));
             // Bytes 8-11 are the prelude CRC (not validated here)
 
+            // Validate server-controlled lengths for OOM/exception DoS.
+            const int MaxMessageLength = 16 * 1024 * 1024; // 16 MiB
+            const int MaxHeadersLength = 128 * 1024;       // 128 KiB
+            const int Overhead = 16;                       // 12 prelude + 4 message CRC
+            if (totalLength < Overhead || totalLength > MaxMessageLength)
+                throw new InvalidOperationException($"S3 Select event-stream message length out of range: {totalLength}");
+            if (headersLength < 0 || headersLength > MaxHeadersLength || headersLength > totalLength - Overhead)
+                throw new InvalidOperationException($"S3 Select event-stream headers length out of range: {headersLength}");
+
             var headerBytes = new byte[headersLength];
             await ReadExactAsync(stream, headerBytes, cancellationToken).ConfigureAwait(false);
 
-            var payloadLength = totalLength - headersLength - 16; // 12 prelude + 4 message CRC
+            var payloadLength = totalLength - headersLength - Overhead; // >= 0, <= MaxMessageLength
             var payload = payloadLength > 0 ? new byte[payloadLength] : Array.Empty<byte>();
             if (payloadLength > 0)
                 await ReadExactAsync(stream, payload, cancellationToken).ConfigureAwait(false);
@@ -1373,8 +1382,12 @@ internal class ObstorClient : IObstorClient
         while (i < headerBytes.Length)
         {
             var nameLen = headerBytes[i++];
+            if (i + nameLen > headerBytes.Length)
+                break;
             var name = Encoding.UTF8.GetString(headerBytes, i, nameLen);
             i += nameLen;
+            if (i >= headerBytes.Length)
+                break;
             var valueType = headerBytes[i++];
             switch (valueType)
             {
@@ -1386,18 +1399,28 @@ internal class ObstorClient : IObstorClient
                 case 9: i += 16; break; // UUID
                 case 6: // bytes (2-byte length + data)
                 {
+                    if (i + 2 > headerBytes.Length)
+                        return headers;
                     var len = BinaryPrimitives.ReadInt16BigEndian(headerBytes.AsSpan(i));
+                    if (len < 0 || i + 2 + len > headerBytes.Length)
+                        return headers;
                     i += 2 + len;
                     break;
                 }
                 case 7: // string (2-byte length + UTF-8 data)
                 {
+                    if (i + 2 > headerBytes.Length)
+                        return headers;
                     var len = BinaryPrimitives.ReadInt16BigEndian(headerBytes.AsSpan(i));
                     i += 2;
+                    if (len < 0 || i + len > headerBytes.Length)
+                        return headers;
                     headers[name] = Encoding.UTF8.GetString(headerBytes, i, len);
                     i += len;
                     break;
                 }
+                default:
+                    return headers;
             }
         }
         return headers;

@@ -66,20 +66,21 @@ public class WebIdentityProvider : ICredentialsProvider
         if (string.IsNullOrEmpty(accessToken)) throw new InvalidOperationException("No access token");
 
         var opts = _options.Value;
-        var query = new QueryParams();
-        query.Add("Action", "AssumeRoleWithWebIdentity");
-        query.Add("Version", "2011-06-15");
-        query.Add("WebIdentityToken", accessToken);
-        query.Add("DurationSeconds", opts.DurationSeconds.ToString(CultureInfo.InvariantCulture));
-        query.AddIfNotNullOrEmpty("Policy", opts.Policy);
-        query.AddIfNotNullOrEmpty("RoleARN", opts.RoleARN);
-        query.AddIfNotNullOrEmpty("TokenRevokeType", opts.TokenRevokeType);
-
-        var builder = new UriBuilder(opts.StsEndPoint)
+        var form = new List<KeyValuePair<string, string>>
         {
-            Query = query.ToString()
+            new("Action", "AssumeRoleWithWebIdentity"),
+            new("Version", "2011-06-15"),
+            new("WebIdentityToken", accessToken),
+            new("DurationSeconds", opts.DurationSeconds.ToString(CultureInfo.InvariantCulture)),
         };
-        using var req = new HttpRequestMessage(HttpMethod.Post, builder.Uri);
+        if (!string.IsNullOrEmpty(opts.Policy)) form.Add(new("Policy", opts.Policy));
+        if (!string.IsNullOrEmpty(opts.RoleARN)) form.Add(new("RoleARN", opts.RoleARN));
+        if (!string.IsNullOrEmpty(opts.TokenRevokeType)) form.Add(new("TokenRevokeType", opts.TokenRevokeType));
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, opts.StsEndPoint)
+        {
+            Content = new FormUrlEncodedContent(form),
+        };
         using var httpClient = _httpClientFactory.CreateClient(opts.ObstorHttpClient);
         using var resp = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
